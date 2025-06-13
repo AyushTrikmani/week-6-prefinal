@@ -26,31 +26,80 @@ st.caption(
 # Load the trained ensemble model from the saved pickle file.
 modelfile = "./voting_model.pkl"
 
-try:
-    with open(modelfile, 'rb') as file:
-        voting_model = pickle.load(file)
-    st.success("✅ Model loaded successfully!")
-except FileNotFoundError:
-    st.error("❌ Model file not found. Please ensure voting_model.pkl is in the repository.")
-    st.stop()
-except Exception as e:
-    st.error(f"❌ Error loading model: {str(e)}")
-    st.stop()
-
 # Caching the model for faster loading
 @st.cache_resource
 def load_model():
-    """Load and cache the voting model"""
+    """Load and cache the voting model with Git LFS handling"""
+    import os
+    
+    # Check if file exists
+    if not os.path.exists(modelfile):
+        st.error("❌ Model file not found. Please ensure voting_model.pkl is in the repository.")
+        return None
+    
+    # Check file size - Git LFS pointer files are very small (usually under 200 bytes)
+    file_size = os.path.getsize(modelfile)
+    
+    if file_size < 1000:  # Likely a Git LFS pointer file
+        st.warning(f"⚠️ Model file is only {file_size} bytes - this appears to be a Git LFS pointer file.")
+        
+        # Try to read as text to confirm it's a Git LFS pointer
+        try:
+            with open(modelfile, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if 'version https://git-lfs.github.com' in content or content.startswith('version'):
+                    st.error("""
+                    🚨 **Git LFS Issue Detected!**
+                    
+                    Your pickle file is a Git LFS pointer, not the actual model file.
+                    
+                    **Solutions:**
+                    1. **Quick Fix:** Upload the actual .pkl file directly through GitHub web interface (drag & drop)
+                    2. **Or:** Use a file hosting service (Google Drive, Dropbox) and modify the code to download from URL
+                    3. **Or:** Split your model into smaller files
+                    
+                    **The pointer file contains:**
+                    ```
+                    """ + content + """
+                    ```
+                    """)
+                    return None
+        except:
+            pass  # Continue if it's not readable as text
+    
     try:
         with open(modelfile, 'rb') as file:
             model = pickle.load(file)
+        st.success(f"✅ Model loaded successfully! File size: {file_size:,} bytes")
         return model
+        
     except Exception as e:
-        st.error(f"Error loading cached model: {str(e)}")
+        if "invalid load key" in str(e):
+            st.error(f"""
+            🚨 **Pickle Loading Error: {str(e)}**
+            
+            This error occurs when:
+            - Git LFS pointer file instead of actual pickle file
+            - Corrupted or incomplete file upload
+            - File uploaded as text instead of binary
+            
+            **Immediate Solutions:**
+            1. **Re-upload Method 1:** Delete the current file and upload the original .pkl file directly via GitHub web interface
+            2. **Re-upload Method 2:** Use GitHub Desktop instead of Git LFS
+            3. **Alternative:** Host the file externally and download via URL
+            
+            Current file size: {file_size} bytes (should be >10MB for a real model)
+            """)
+        else:
+            st.error(f"❌ Error loading model: {str(e)}")
         return None
 
 # Load the cached model
 voting_model = load_model()
+
+# Stop execution if model loading failed
+if voting_model is None:
+    st.stop()
 
 # Define the function for the wait time predictor using the loaded model. This function takes in the input parameters and returns a predicted wait time in days.
 def waitime_predictor(
