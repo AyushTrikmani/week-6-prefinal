@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 from PIL import Image
 import pandas as pd
+import os
 
 # Set the page configuration of the app, including the page title, icon, and layout.
 st.set_page_config(
@@ -28,28 +29,92 @@ st.caption(
 def load_model():
     # Load the trained ensemble model from the saved pickle file.
     modelfile = "./voting_model.pkl"
-    with open(modelfile, 'rb') as file:
-        model = pickle.load(file)
-    return model
+    
+    # Check if file exists
+    if not os.path.exists(modelfile):
+        st.error(f"Model file '{modelfile}' not found!")
+        return None
+    
+    # Check file size
+    file_size = os.path.getsize(modelfile)
+    st.info(f"Model file size: {file_size} bytes")
+    
+    try:
+        with open(modelfile, 'rb') as file:
+            model = pickle.load(file)
+        st.success("Model loaded successfully!")
+        return model
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        return None
 
 # Load the model
 voting_model = load_model()
 
-# Define the function for the wait time predictor using the loaded model. This function takes in the input parameters and returns a predicted wait time in days.
-def waitime_predictor(
-    purchase_dow,
-    purchase_month,
-    year,
-    product_size_cm3,
-    product_weight_g,
-    geolocation_state_customer,
-    geolocation_state_seller,
-    distance,
-):
-    prediction = voting_model.predict(
-        np.array(
-            [
+# Only proceed if model is loaded successfully
+if voting_model is not None:
+    # Define the function for the wait time predictor using the loaded model.
+    def waitime_predictor(
+        purchase_dow,
+        purchase_month,
+        year,
+        product_size_cm3,
+        product_weight_g,
+        geolocation_state_customer,
+        geolocation_state_seller,
+        distance,
+    ):
+        prediction = voting_model.predict(
+            np.array(
                 [
+                    [
+                        purchase_dow,
+                        purchase_month,
+                        year,
+                        product_size_cm3,
+                        product_weight_g,
+                        geolocation_state_customer,
+                        geolocation_state_seller,
+                        distance,
+                    ]
+                ]
+            )
+        )
+        return round(prediction[0])
+
+    # Define the input parameters using Streamlit's sidebar.
+    with st.sidebar:
+        st.markdown("### 📦 Supply Chain Optimization")
+        st.header("Input Parameters")
+        purchase_dow = st.number_input(
+            "Purchased Day of the Week", min_value=0, max_value=6, step=1, value=3
+        )
+        purchase_month = st.number_input(
+            "Purchased Month", min_value=1, max_value=12, step=1, value=1
+        )
+        year = st.number_input("Purchased Year", value=2018)
+        product_size_cm3 = st.number_input("Product Size in cm^3", value=9328)
+        product_weight_g = st.number_input("Product Weight in grams", value=1800)
+        geolocation_state_customer = st.number_input(
+            "Geolocation State of the Customer", value=10
+        )
+        geolocation_state_seller = st.number_input(
+            "Geolocation State of the Seller", value=20
+        )
+        distance = st.number_input("Distance", value=475.35)
+        
+        # Submit button
+        submit = st.button("Predict Wait Time", type="primary")
+
+    # Define the submit button for the input parameters.
+    with st.container():
+        # Define the output container for the predicted wait time.
+        st.header("Output: Wait Time in Days")
+
+        # When the submit button is clicked, call the wait time predictor function
+        if submit:
+            try:
+                prediction = waitime_predictor(
                     purchase_dow,
                     purchase_month,
                     year,
@@ -58,75 +123,30 @@ def waitime_predictor(
                     geolocation_state_customer,
                     geolocation_state_seller,
                     distance,
-                ]
-            ]
-        )
-    )
-    return round(prediction[0])
+                )
+                with st.spinner(text="This may take a moment..."):
+                    st.success(f"Predicted Wait Time: {prediction} days")
+            except Exception as e:
+                st.error(f"Error making prediction: {str(e)}")
 
-# Define the input parameters using Streamlit's sidebar. These parameters include the purchased day of the week, month, and year, product size, weight, geolocation state of the customer and seller, and distance.
-with st.sidebar:
-    # Create a placeholder image or remove this section if image is not available
-    st.markdown("### 📦 Supply Chain Optimization")
-    st.header("Input Parameters")
-    purchase_dow = st.number_input(
-        "Purchased Day of the Week", min_value=0, max_value=6, step=1, value=3
-    )
-    purchase_month = st.number_input(
-        "Purchased Month", min_value=1, max_value=12, step=1, value=1
-    )
-    year = st.number_input("Purchased Year", value=2018)
-    product_size_cm3 = st.number_input("Product Size in cm^3", value=9328)
-    product_weight_g = st.number_input("Product Weight in grams", value=1800)
-    geolocation_state_customer = st.number_input(
-        "Geolocation State of the Customer", value=10
-    )
-    geolocation_state_seller = st.number_input(
-        "Geolocation State of the Seller", value=20
-    )
-    distance = st.number_input("Distance", value=475.35)
-    
-    # Submit button
-    submit = st.button("Predict Wait Time", type="primary")
+else:
+    st.error("Cannot proceed without a valid model file. Please check your model file and try again.")
 
-# Define the submit button for the input parameters.
-with st.container():
-    # Define the output container for the predicted wait time.
-    st.header("Output: Wait Time in Days")
+# Define a sample dataset for demonstration purposes.
+data = {
+    "Purchased Day of the Week": ["0", "3", "1"],
+    "Purchased Month": ["6", "3", "1"],
+    "Purchased Year": ["2018", "2017", "2018"],
+    "Product Size in cm^3": ["37206.0", "63714", "54816"],
+    "Product Weight in grams": ["16250.0", "7249", "9600"],
+    "Geolocation State Customer": ["25", "25", "25"],
+    "Geolocation State Seller": ["20", "7", "20"],
+    "Distance": ["247.94", "250.35", "4.915"],
+}
 
-    # When the submit button is clicked, call the wait time predictor function and display the predicted wait time in the output container.
-    if submit:
-        try:
-            prediction = waitime_predictor(
-                purchase_dow,
-                purchase_month,
-                year,
-                product_size_cm3,
-                product_weight_g,
-                geolocation_state_customer,
-                geolocation_state_seller,
-                distance,
-            )
-            with st.spinner(text="This may take a moment..."):
-                st.success(f"Predicted Wait Time: {prediction} days")
-        except Exception as e:
-            st.error(f"Error making prediction: {str(e)}")
+# Create a DataFrame from the sample dataset.
+df = pd.DataFrame(data)
 
-    # Define a sample dataset for demonstration purposes.
-    data = {
-        "Purchased Day of the Week": ["0", "3", "1"],
-        "Purchased Month": ["6", "3", "1"],
-        "Purchased Year": ["2018", "2017", "2018"],
-        "Product Size in cm^3": ["37206.0", "63714", "54816"],
-        "Product Weight in grams": ["16250.0", "7249", "9600"],
-        "Geolocation State Customer": ["25", "25", "25"],
-        "Geolocation State Seller": ["20", "7", "20"],
-        "Distance": ["247.94", "250.35", "4.915"],
-    }
-
-    # Create a DataFrame from the sample dataset.
-    df = pd.DataFrame(data)
-
-    # Display the sample dataset in the Streamlit app.
-    st.header("Sample Dataset")
-    st.write(df)
+# Display the sample dataset in the Streamlit app.
+st.header("Sample Dataset")
+st.write(df)
