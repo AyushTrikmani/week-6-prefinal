@@ -4,6 +4,8 @@ import pickle
 import numpy as np
 from PIL import Image
 import pandas as pd
+import requests
+import os
 
 # Set the page configuration of the app, including the page title, icon, and layout.
 st.set_page_config(
@@ -23,82 +25,67 @@ st.caption(
     "With Timelytics, businesses can identify potential bottlenecks and delays in their supply chain and take proactive measures to address them, reducing lead times and improving delivery times. The model utilizes historical data on order processing times, production lead times, shipping times, and other relevant variables to generate accurate forecasts of OTD times. These forecasts can be used to optimize inventory management, improve customer service, and increase overall efficiency in the supply chain."
 )
 
-# Load the trained ensemble model from the saved pickle file.
-modelfile = "./voting_model.pkl"
+# Google Drive file ID for the model
+GOOGLE_DRIVE_FILE_ID = "1dmuDcdvi1wo92TtxZxvgX00WZpW_zHeN"
+LOCAL_MODEL_PATH = "./voting_model.pkl"
 
 # Caching the model for faster loading
 @st.cache_resource
 def load_model():
-    """Load and cache the voting model with Git LFS handling"""
-    import os
+    """Download model from Google Drive and load it"""
     
-    # Check if file exists
-    if not os.path.exists(modelfile):
-        st.error("❌ Model file not found. Please ensure voting_model.pkl is in the repository.")
-        return None
-    
-    # Check file size - Git LFS pointer files are very small (usually under 200 bytes)
-    file_size = os.path.getsize(modelfile)
-    
-    if file_size < 1000:  # Likely a Git LFS pointer file
-        st.warning(f"⚠️ Model file is only {file_size} bytes - this appears to be a Git LFS pointer file.")
-        
-        # Try to read as text to confirm it's a Git LFS pointer
+    # Check if model already exists locally
+    if os.path.exists(LOCAL_MODEL_PATH):
         try:
-            with open(modelfile, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if 'version https://git-lfs.github.com' in content or content.startswith('version'):
-                    st.error("""
-                    🚨 **Git LFS Issue Detected!**
-                    
-                    Your pickle file is a Git LFS pointer, not the actual model file.
-                    
-                    **Solutions:**
-                    1. **Quick Fix:** Upload the actual .pkl file directly through GitHub web interface (drag & drop)
-                    2. **Or:** Use a file hosting service (Google Drive, Dropbox) and modify the code to download from URL
-                    3. **Or:** Split your model into smaller files
-                    
-                    **The pointer file contains:**
-                    ```
-                    """ + content + """
-                    ```
-                    """)
-                    return None
+            # Check if it's a valid pickle file (not a Git LFS pointer)
+            file_size = os.path.getsize(LOCAL_MODEL_PATH)
+            if file_size > 10000:  # If file is larger than 10KB, likely a real model
+                with open(LOCAL_MODEL_PATH, 'rb') as file:
+                    model = pickle.load(file)
+                st.success(f"✅ Model loaded from local file! Size: {file_size:,} bytes")
+                return model
         except:
-            pass  # Continue if it's not readable as text
+            pass  # If loading fails, download from Google Drive
+    
+    # Download model from Google Drive
+    st.info("📥 Downloading model from Google Drive...")
     
     try:
-        with open(modelfile, 'rb') as file:
+        # Google Drive direct download URL
+        url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}"
+        
+        # Download with progress
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        # Save the downloaded file
+        with open(LOCAL_MODEL_PATH, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        # Load the model
+        with open(LOCAL_MODEL_PATH, 'rb') as file:
             model = pickle.load(file)
-        st.success(f"✅ Model loaded successfully! File size: {file_size:,} bytes")
+        
+        file_size = os.path.getsize(LOCAL_MODEL_PATH)
+        st.success(f"✅ Model downloaded and loaded successfully! Size: {file_size:,} bytes")
         return model
         
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Error downloading model: {str(e)}")
+        st.error("Please check your internet connection and try again.")
+        return None
     except Exception as e:
-        if "invalid load key" in str(e):
-            st.error(f"""
-            🚨 **Pickle Loading Error: {str(e)}**
-            
-            This error occurs when:
-            - Git LFS pointer file instead of actual pickle file
-            - Corrupted or incomplete file upload
-            - File uploaded as text instead of binary
-            
-            **Immediate Solutions:**
-            1. **Re-upload Method 1:** Delete the current file and upload the original .pkl file directly via GitHub web interface
-            2. **Re-upload Method 2:** Use GitHub Desktop instead of Git LFS
-            3. **Alternative:** Host the file externally and download via URL
-            
-            Current file size: {file_size} bytes (should be >10MB for a real model)
-            """)
-        else:
-            st.error(f"❌ Error loading model: {str(e)}")
+        st.error(f"❌ Error loading model: {str(e)}")
         return None
 
 # Load the cached model
-voting_model = load_model()
+with st.spinner("Loading model... This may take a moment for first-time download."):
+    voting_model = load_model()
 
 # Stop execution if model loading failed
 if voting_model is None:
+    st.error("❌ Unable to load the model. Please refresh the page and try again.")
     st.stop()
 
 # Define the function for the wait time predictor using the loaded model. This function takes in the input parameters and returns a predicted wait time in days.
