@@ -7,6 +7,13 @@ import pandas as pd
 import requests
 import os
 
+# Try to import gdown, fallback to requests if not available
+try:
+    import gdown
+    USE_GDOWN = True
+except ImportError:
+    USE_GDOWN = False
+
 # Set the page configuration of the app, including the page title, icon, and layout.
 st.set_page_config(
     page_title="Timelytics",
@@ -50,25 +57,74 @@ def load_model():
     # Download model from Google Drive
     st.info("📥 Downloading model from Google Drive...")
     
+    if USE_GDOWN:
+        # Method 1: Use gdown (more reliable for large files)
+        try:
+            url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}"
+            gdown.download(url, LOCAL_MODEL_PATH, quiet=False)
+            
+            # Load the model
+            with open(LOCAL_MODEL_PATH, 'rb') as file:
+                model = pickle.load(file)
+            
+            file_size = os.path.getsize(LOCAL_MODEL_PATH)
+            st.success(f"✅ Model downloaded and loaded successfully! Size: {file_size:,} bytes")
+            return model
+            
+        except Exception as e:
+            st.error(f"❌ gdown error: {str(e)}")
+            # Fall back to requests method
+    
+    # Method 2: Use requests with better error handling
     try:
-        # Google Drive direct download URL
-        url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}"
+        # Use session to handle redirects properly
+        session = requests.Session()
         
-        # Download with progress
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
+        # First request to get the download URL
+        url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}"
+        response = session.get(url, stream=True)
+        
+        # Check if we need to handle the "large file" confirmation
+        if 'confirm=' in response.text:
+            # Extract confirmation token
+            import re
+            confirm_token = re.search(r'confirm=([^&"]+)', response.text)
+            if confirm_token:
+                confirm_url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}&confirm={confirm_token.group(1)}"
+                response = session.get(confirm_url, stream=True)
+        
+        # Check if we got a proper response
+        if response.status_code != 200:
+            st.error(f"❌ Failed to download. Status code: {response.status_code}")
+            return None
+        
+        # Check content type
+        content_type = response.headers.get('content-type', '')
+        if 'text/html' in content_type:
+            st.error("❌ Received HTML instead of file. Please check if your Google Drive link is correct.")
+            st.info("Make sure your file is shared as 'Anyone with the link can view'")
+            return None
         
         # Save the downloaded file
+        total_size = 0
         with open(LOCAL_MODEL_PATH, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:
+                    f.write(chunk)
+                    total_size += len(chunk)
+        
+        st.info(f"Downloaded {total_size:,} bytes")
+        
+        # Verify the file is not empty
+        if total_size < 1000:
+            st.error("❌ Downloaded file is too small. Check your Google Drive sharing settings.")
+            return None
         
         # Load the model
         with open(LOCAL_MODEL_PATH, 'rb') as file:
             model = pickle.load(file)
         
-        file_size = os.path.getsize(LOCAL_MODEL_PATH)
-        st.success(f"✅ Model downloaded and loaded successfully! Size: {file_size:,} bytes")
+        st.success(f"✅ Model downloaded and loaded successfully! Size: {total_size:,} bytes")
         return model
         
     except requests.exceptions.RequestException as e:
@@ -77,6 +133,7 @@ def load_model():
         return None
     except Exception as e:
         st.error(f"❌ Error loading model: {str(e)}")
+        st.info("This might be due to Google Drive sharing restrictions or file corruption.")
         return None
 
 # Load the cached model
