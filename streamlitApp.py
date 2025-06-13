@@ -8,10 +8,37 @@ import os
 
 # Set the page configuration of the app, including the page title, icon, and layout.
 st.set_page_config(
-    page_title="Timelytics",
+    page_title="Timelytics - Supply Chain Optimizer",
     page_icon="📦",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .prediction-result {
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    .info-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Function to load images safely
 def load_image(image_path):
@@ -25,28 +52,48 @@ def load_image(image_path):
         st.warning(f"Could not load image {image_path}: {str(e)}")
         return None
 
-# Load header image if available
-header_image = load_image("./assets/header.jpg") or load_image("./assets/header.png") or load_image("./assets/supply_chain.jpg")
-
 # Display header image if available
+header_image = load_image("./assets/supply_chain_optimisation.jpg") or load_image("./assets/header.jpg")
 if header_image:
     st.image(header_image, use_column_width=True)
 
 # Display the title and captions for the app.
-st.title("Timelytics: Optimize your supply chain with advanced forecasting techniques.")
+st.markdown('<h1 class="main-header">📦 Timelytics: Optimize your supply chain with advanced forecasting techniques</h1>', unsafe_allow_html=True)
 
-st.caption(
-    "Timelytics is an ensemble model that utilizes three powerful machine learning algorithms - XGBoost, Random Forests, and Support Vector Machines (SVM) - to accurately forecast Order to Delivery (OTD) times. By combining the strengths of these three algorithms, Timelytics provides a robust and reliable prediction of OTD times, helping businesses to optimize their supply chain operations."
-)
+# Introduction section
+col1, col2 = st.columns([2, 1])
 
-st.caption(
-    "With Timelytics, businesses can identify potential bottlenecks and delays in their supply chain and take proactive measures to address them, reducing lead times and improving delivery times. The model utilizes historical data on order processing times, production lead times, shipping times, and other relevant variables to generate accurate forecasts of OTD times. These forecasts can be used to optimize inventory management, improve customer service, and increase overall efficiency in the supply chain."
-)
+with col1:
+    st.markdown("""
+    ### 🚀 About Timelytics
+    
+    **Timelytics** is an ensemble model that utilizes three powerful machine learning algorithms:
+    - **XGBoost** - Gradient boosting for high performance
+    - **Random Forests** - Ensemble learning for stability  
+    - **Support Vector Machines (SVM)** - Non-linear pattern recognition
+    
+    By combining the strengths of these algorithms, Timelytics provides robust and reliable predictions 
+    of Order to Delivery (OTD) times, helping businesses optimize their supply chain operations.
+    """)
 
-# Caching the model for faster loading
+with col2:
+    st.markdown("""
+    <div class="info-card">
+    <h4>🎯 Key Benefits</h4>
+    <ul>
+    <li>Accurate delivery time forecasting</li>
+    <li>Identify supply chain bottlenecks</li>
+    <li>Optimize inventory management</li>
+    <li>Improve customer satisfaction</li>
+    <li>Reduce operational costs</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Model loading with comprehensive error handling
 @st.cache_resource
 def load_model():
-    # Load the trained ensemble model from the saved pickle file.
+    """Load the trained ensemble model from the saved pickle file."""
     modelfile = "./voting_model.pkl"
     
     # Check if file exists
@@ -57,19 +104,18 @@ def load_model():
     
     # Check file size
     file_size = os.path.getsize(modelfile)
-    st.info(f"📁 Model file size: {file_size} bytes")
     
     # If file is too small, it's likely a Git LFS pointer or corrupted
     if file_size < 1000:  # Less than 1KB is suspicious for a ML model
-        st.warning(f"⚠️ Model file seems too small ({file_size} bytes). This might be a Git LFS pointer file or corrupted file.")
+        st.warning(f"⚠️ Model file seems too small ({file_size} bytes). This might be a Git LFS pointer file.")
         
         # Try to read the first few lines to check if it's a text file
         try:
             with open(modelfile, 'r', encoding='utf-8') as f:
                 first_line = f.readline().strip()
-                if first_line.startswith('version') or 'git-lfs' in first_line.lower():
-                    st.error("🔍 This appears to be a Git LFS pointer file, not the actual pickle file!")
-                    st.info("**Solution:** Upload the actual .pkl file directly to GitHub without using Git LFS.")
+                if 'git-lfs' in first_line.lower() or first_line.startswith('version'):
+                    st.error("🔍 This is a Git LFS pointer file, not the actual pickle file!")
+                    st.info("**Solution:** Upload the actual .pkl file directly to GitHub.")
                     return None
         except:
             pass  # It's binary, continue with pickle loading
@@ -77,216 +123,278 @@ def load_model():
     try:
         with open(modelfile, 'rb') as file:
             model = pickle.load(file)
+        
         st.success("✅ Model loaded successfully!")
-        st.info(f"📊 Model type: {type(model).__name__}")
         return model
+        
     except Exception as e:
         st.error(f"❌ Error loading model: {str(e)}")
         
-        # Provide specific help based on error type
         if "invalid load key" in str(e):
-            st.info("**This error usually means:**")
-            st.info("1. The pickle file is corrupted")
-            st.info("2. You uploaded a Git LFS pointer instead of the actual file")
-            st.info("3. The file was not uploaded in binary mode")
-            st.info("**Solution:** Re-upload the original .pkl file directly to GitHub")
+            st.info("""
+            **This error usually means:**
+            - The pickle file is corrupted
+            - You uploaded a Git LFS pointer instead of the actual file
+            - The file was not uploaded in binary mode
+            
+            **Solution:** Re-upload the original .pkl file directly to GitHub
+            """)
         
         return None
-
-# Load CSV data if available
-@st.cache_data
-def load_csv_data():
-    """Load CSV data from data folder if available"""
-    csv_files = []
-    data_folder = "./data"
-    
-    if os.path.exists(data_folder):
-        for file in os.listdir(data_folder):
-            if file.endswith('.csv'):
-                csv_files.append(os.path.join(data_folder, file))
-    
-    return csv_files
 
 # Load the model
 voting_model = load_model()
 
-# Load available CSV files
-csv_files = load_csv_data()
-if csv_files:
-    st.info(f"📊 Found {len(csv_files)} CSV file(s) in data folder: {[os.path.basename(f) for f in csv_files]}")
+# Define the function for the wait time predictor
+def waitime_predictor(purchase_dow, purchase_month, year, product_size_cm3, 
+                     product_weight_g, geolocation_state_customer, 
+                     geolocation_state_seller, distance):
+    """
+    Predict wait time using the ensemble model
+    
+    Args:
+        All the input parameters for prediction
+    
+    Returns:
+        Predicted wait time in days (rounded to nearest integer)
+    """
+    try:
+        prediction = voting_model.predict(
+            np.array([[
+                purchase_dow, purchase_month, year, product_size_cm3,
+                product_weight_g, geolocation_state_customer,
+                geolocation_state_seller, distance
+            ]])
+        )
+        return round(prediction[0])
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
+        return None
 
 # Only proceed if model is loaded successfully
 if voting_model is not None:
-    # Define the function for the wait time predictor using the loaded model.
-    def waitime_predictor(
-        purchase_dow,
-        purchase_month,
-        year,
-        product_size_cm3,
-        product_weight_g,
-        geolocation_state_customer,
-        geolocation_state_seller,
-        distance,
-    ):
-        try:
-            prediction = voting_model.predict(
-                np.array(
-                    [
-                        [
-                            purchase_dow,
-                            purchase_month,
-                            year,
-                            product_size_cm3,
-                            product_weight_g,
-                            geolocation_state_customer,
-                            geolocation_state_seller,
-                            distance,
-                        ]
-                    ]
-                )
-            )
-            return round(prediction[0])
-        except Exception as e:
-            st.error(f"Prediction error: {str(e)}")
-            return None
-
-    # Define the input parameters using Streamlit's sidebar.
+    
+    # Sidebar for input parameters
     with st.sidebar:
         # Load sidebar image if available
-        sidebar_image = load_image("./assets/logistics.jpg") or load_image("./assets/supply_chain.png")
+        sidebar_image = load_image("./assets/supply_chain_optimisation.jpg")
         if sidebar_image:
             st.image(sidebar_image, use_column_width=True)
         
-        st.markdown("### 📦 Supply Chain Optimization")
-        st.header("Input Parameters")
+        st.markdown("### 📊 Input Parameters")
+        st.markdown("---")
         
-        # Input parameters with better descriptions
+        # Day of week selection
         purchase_dow = st.selectbox(
-            "Purchased Day of the Week",
+            "📅 Purchased Day of the Week",
             options=[0, 1, 2, 3, 4, 5, 6],
             index=3,
-            format_func=lambda x: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][x]
+            format_func=lambda x: ["Monday", "Tuesday", "Wednesday", "Thursday", 
+                                 "Friday", "Saturday", "Sunday"][x]
         )
         
+        # Month selection
         purchase_month = st.selectbox(
-            "Purchased Month",
+            "📆 Purchased Month",
             options=list(range(1, 13)),
             index=0,
             format_func=lambda x: ["January", "February", "March", "April", "May", "June",
                                  "July", "August", "September", "October", "November", "December"][x-1]
         )
         
-        year = st.number_input("Purchased Year", min_value=2010, max_value=2030, value=2018)
-        product_size_cm3 = st.number_input("Product Size (cm³)", min_value=0.0, value=9328.0)
-        product_weight_g = st.number_input("Product Weight (grams)", min_value=0.0, value=1800.0)
+        # Year input
+        year = st.number_input(
+            "🗓️ Purchased Year", 
+            min_value=2010, 
+            max_value=2030, 
+            value=2018,
+            help="Year of purchase"
+        )
+        
+        # Product specifications
+        st.markdown("#### 📦 Product Specifications")
+        product_size_cm3 = st.number_input(
+            "📏 Product Size (cm³)", 
+            min_value=0.0, 
+            value=9328.0,
+            help="Volume of the product in cubic centimeters"
+        )
+        
+        product_weight_g = st.number_input(
+            "⚖️ Product Weight (grams)", 
+            min_value=0.0, 
+            value=1800.0,
+            help="Weight of the product in grams"
+        )
+        
+        # Geographic information
+        st.markdown("#### 🌍 Geographic Information")
         geolocation_state_customer = st.number_input(
-            "Customer State Code", min_value=0, max_value=50, value=10
+            "🏠 Customer State Code", 
+            min_value=0, 
+            max_value=50, 
+            value=10,
+            help="Numerical code representing customer's state"
         )
+        
         geolocation_state_seller = st.number_input(
-            "Seller State Code", min_value=0, max_value=50, value=20
+            "🏪 Seller State Code", 
+            min_value=0, 
+            max_value=50, 
+            value=20,
+            help="Numerical code representing seller's state"
         )
-        distance = st.number_input("Distance (km)", min_value=0.0, value=475.35)
+        
+        distance = st.number_input(
+            "📍 Distance (km)", 
+            min_value=0.0, 
+            value=475.35,
+            help="Distance between customer and seller in kilometers"
+        )
+        
+        st.markdown("---")
         
         # Submit button
-        submit = st.button("🔮 Predict Wait Time", type="primary", use_container_width=True)
+        submit = st.button(
+            "🔮 Predict Delivery Time", 
+            type="primary", 
+            use_container_width=True,
+            help="Click to get delivery time prediction"
+        )
 
-    # Create two columns for better layout
-    col1, col2 = st.columns([2, 1])
+    # Main content area
+    st.markdown("## 🎯 Prediction Results")
     
-    with col1:
-        # Define the output container for the predicted wait time.
-        st.header("🎯 Prediction Results")
-
-        # When the submit button is clicked, call the wait time predictor function
+    # Create columns for better layout
+    result_col1, result_col2 = st.columns([2, 1])
+    
+    with result_col1:
         if submit:
             with st.spinner("🤖 Analyzing supply chain data..."):
                 prediction = waitime_predictor(
-                    purchase_dow,
-                    purchase_month,
-                    year,
-                    product_size_cm3,
-                    product_weight_g,
-                    geolocation_state_customer,
-                    geolocation_state_seller,
-                    distance,
+                    purchase_dow, purchase_month, year, product_size_cm3,
+                    product_weight_g, geolocation_state_customer,
+                    geolocation_state_seller, distance
                 )
                 
                 if prediction is not None:
-                    st.success(f"📅 **Predicted Wait Time: {prediction} days**")
-                    
-                    # Add interpretation
+                    # Display prediction with styling
                     if prediction <= 5:
-                        st.info("🚀 **Fast delivery expected!**")
+                        st.success(f"🚀 **Predicted Delivery Time: {prediction} days**")
+                        st.info("🎉 **Excellent! Fast delivery expected!**")
                     elif prediction <= 10:
-                        st.info("📦 **Standard delivery timeframe**")
+                        st.success(f"📦 **Predicted Delivery Time: {prediction} days**")
+                        st.info("✅ **Good! Standard delivery timeframe**")
+                    elif prediction <= 15:
+                        st.warning(f"⏰ **Predicted Delivery Time: {prediction} days**")
+                        st.info("🔄 **Moderate delivery time**")
                     else:
-                        st.warning("⏰ **Longer delivery time - consider optimizing**")
+                        st.error(f"🐌 **Predicted Delivery Time: {prediction} days**")
+                        st.warning("⚠️ **Extended delivery time - consider supply chain optimization**")
+                    
+                    # Additional insights
+                    st.markdown("### 📈 Delivery Insights")
+                    
+                    insights = []
+                    if distance > 1000:
+                        insights.append("🌍 Long distance may contribute to extended delivery time")
+                    if product_weight_g > 5000:
+                        insights.append("📦 Heavy product may require special handling")
+                    if product_size_cm3 > 50000:
+                        insights.append("📏 Large product size may affect shipping options")
+                    if geolocation_state_customer != geolocation_state_seller:
+                        insights.append("🚚 Interstate delivery may add processing time")
+                    
+                    if insights:
+                        for insight in insights:
+                            st.write(f"• {insight}")
+                    else:
+                        st.write("• ✅ Optimal delivery conditions detected")
+                        
                 else:
-                    st.error("❌ Prediction failed. Please check your input values.")
-
-    with col2:
-        # Display model info
-        st.header("🤖 Model Information")
-        st.info("**Ensemble Model Components:**")
-        st.write("• XGBoost Regressor")
-        st.write("• Random Forest")
-        st.write("• Support Vector Machine")
-        st.write("• Voting Ensemble Strategy")
+                    st.error("❌ Prediction failed. Please check your input values and try again.")
+        else:
+            st.info("👆 Please set your parameters in the sidebar and click 'Predict Delivery Time' to get started!")
+    
+    with result_col2:
+        # Model information card
+        st.markdown("""
+        <div class="info-card">
+        <h4>🤖 Model Information</h4>
+        <p><strong>Ensemble Components:</strong></p>
+        <ul>
+        <li>🌟 XGBoost Regressor</li>
+        <li>🌲 Random Forest</li>
+        <li>🎯 Support Vector Machine</li>
+        <li>🗳️ Voting Ensemble Strategy</li>
+        </ul>
+        <p><strong>Prediction Accuracy:</strong> High</p>
+        <p><strong>Model Type:</strong> Regression Ensemble</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 else:
+    # Error handling when model fails to load
     st.error("❌ **Cannot proceed without a valid model file.**")
     st.markdown("### 🔧 **Troubleshooting Steps:**")
-    st.markdown("""
-    1. **Check your repository:** Ensure `voting_model.pkl` exists in the root directory
-    2. **File size:** The pickle file should be larger than 1KB (typically several MB)
-    3. **Re-upload:** Delete and re-upload the original pickle file from your assignment
-    4. **Avoid Git LFS:** Upload directly through GitHub's web interface
-    5. **Binary format:** Ensure the file is uploaded in binary mode, not as text
-    """)
+    
+    with st.expander("📋 Click here for detailed troubleshooting"):
+        st.markdown("""
+        1. **Check your repository:** Ensure `voting_model.pkl` exists in the root directory
+        2. **File size:** The pickle file should be larger than 1KB (typically several MB)
+        3. **Re-upload:** Delete and re-upload the original pickle file from your assignment
+        4. **Avoid Git LFS:** Upload directly through GitHub's web interface
+        5. **Binary format:** Ensure the file is uploaded in binary mode, not as text
+        6. **File integrity:** Make sure the file wasn't corrupted during upload
+        
+        **Common Error Solutions:**
+        - `FileNotFoundError`: File not in correct location
+        - `Invalid load key`: File is corrupted or is a Git LFS pointer
+        - `Module not found`: Missing dependencies in requirements.txt
+        """)
 
-# Load and display sample dataset
-st.header("📊 Sample Dataset")
+# Sample Dataset Section
+st.markdown("---")
+st.markdown("## 📊 Sample Dataset")
 
-# Try to load actual data from CSV if available
-if csv_files:
-    try:
-        # Load the first CSV file found
-        df_actual = pd.read_csv(csv_files[0])
-        st.write("**Actual dataset from your data folder:**")
-        st.dataframe(df_actual.head(10), use_container_width=True)
-        st.info(f"📈 Dataset shape: {df_actual.shape[0]} rows × {df_actual.shape[1]} columns")
-    except Exception as e:
-        st.warning(f"Could not load CSV data: {str(e)}")
-        # Fall back to sample data
-        show_sample_data = True
-else:
-    show_sample_data = True
+# Create sample data
+sample_data = {
+    "Day of Week": ["Monday", "Thursday", "Tuesday", "Friday", "Wednesday"],
+    "Month": ["June", "March", "January", "August", "November"],
+    "Year": [2018, 2017, 2018, 2019, 2017],
+    "Product Size (cm³)": [37206.0, 63714.0, 54816.0, 28945.0, 41256.0],
+    "Product Weight (g)": [16250.0, 7249.0, 9600.0, 3450.0, 12800.0],
+    "Customer State": [25, 25, 25, 15, 10],
+    "Seller State": [20, 7, 20, 18, 22],
+    "Distance (km)": [247.94, 250.35, 4.915, 156.78, 892.45],
+    "Expected Delivery": ["7-9 days", "10-12 days", "2-4 days", "5-7 days", "12-15 days"]
+}
 
-# Show sample data if no CSV is available or if CSV loading failed
-if 'show_sample_data' not in locals():
-    show_sample_data = False
+df_sample = pd.DataFrame(sample_data)
 
-if show_sample_data or not csv_files:
-    # Define a sample dataset for demonstration purposes.
-    data = {
-        "Purchased Day of the Week": ["Monday", "Thursday", "Tuesday"],
-        "Purchased Month": ["June", "March", "January"],
-        "Purchased Year": ["2018", "2017", "2018"],
-        "Product Size in cm³": ["37206.0", "63714", "54816"],
-        "Product Weight in grams": ["16250.0", "7249", "9600"],
-        "Geolocation State Customer": ["25", "25", "25"],
-        "Geolocation State Seller": ["20", "7", "20"],
-        "Distance (km)": ["247.94", "250.35", "4.915"],
-        "Expected Wait Time": ["7 days", "12 days", "3 days"]
-    }
+# Display sample dataset with styling
+st.dataframe(
+    df_sample, 
+    use_container_width=True,
+    hide_index=True
+)
 
-    # Create a DataFrame from the sample dataset.
-    df = pd.DataFrame(data)
-
-    # Display the sample dataset in the Streamlit app.
-    st.write("**Sample dataset for reference:**")
-    st.dataframe(df, use_container_width=True)
+st.markdown("""
+**💡 Tips for using this dataset:**
+- Use the sample values as reference for your predictions
+- Notice how distance and product specifications affect delivery times
+- Different state combinations can impact shipping duration
+- Weekend purchases might have different processing times
+""")
 
 # Footer
 st.markdown("---")
-st.markdown("**Timelytics** - Powered by Machine Learning 🤖 | Built with Streamlit 🚀")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; padding: 20px;'>
+        <p><strong>🚀 Timelytics</strong> - Powered by Machine Learning 🤖</p>
+        <p>Built with ❤️ using Streamlit | Supply Chain Optimization Made Simple</p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
