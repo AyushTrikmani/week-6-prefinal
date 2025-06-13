@@ -4,8 +4,6 @@ import pickle
 import numpy as np
 from PIL import Image
 import pandas as pd
-import zipfile
-import io
 
 # Set the page configuration of the app, including the page title, icon, and layout.
 st.set_page_config(
@@ -33,24 +31,6 @@ def load_model():
     with open(modelfile, 'rb') as file:
         model = pickle.load(file)
     return model
-
-# Function to load image from ZIP file
-@st.cache_resource
-def load_image_from_zip():
-    try:
-        with zipfile.ZipFile('./assets.zip', 'r') as zip_ref:
-            # Try different possible image names in the zip
-            image_names = ['supply_chain_optimisation.jpg', 'supply_chain_optimization.jpg', 'image.jpg']
-            for img_name in image_names:
-                try:
-                    with zip_ref.open(img_name) as img_file:
-                        image = Image.open(io.BytesIO(img_file.read()))
-                        return image
-                except KeyError:
-                    continue
-        return None
-    except FileNotFoundError:
-        return None
 
 # Load the model
 voting_model = load_model()
@@ -86,35 +66,28 @@ def waitime_predictor(
 
 # Define the input parameters using Streamlit's sidebar. These parameters include the purchased day of the week, month, and year, product size, weight, geolocation state of the customer and seller, and distance.
 with st.sidebar:
-    # Load and display image
-    supply_chain_image = load_image_from_zip()
-    if supply_chain_image:
-        st.image(supply_chain_image, caption="Supply Chain Optimization", use_column_width=True)
-    else:
-        st.markdown("### 📦 Supply Chain Optimization")
-    
+    # Create a placeholder image or remove this section if image is not available
+    st.markdown("### 📦 Supply Chain Optimization")
     st.header("Input Parameters")
-
-# Define input parameters outside sidebar so they're accessible everywhere
-purchase_dow = st.sidebar.number_input(
-    "Purchased Day of the Week", min_value=0, max_value=6, step=1, value=3
-)
-purchase_month = st.sidebar.number_input(
-    "Purchased Month", min_value=1, max_value=12, step=1, value=1
-)
-year = st.sidebar.number_input("Purchased Year", value=2018)
-product_size_cm3 = st.sidebar.number_input("Product Size in cm^3", value=9328)
-product_weight_g = st.sidebar.number_input("Product Weight in grams", value=1800)
-geolocation_state_customer = st.sidebar.number_input(
-    "Geolocation State of the Customer", value=10
-)
-geolocation_state_seller = st.sidebar.number_input(
-    "Geolocation State of the Seller", value=20
-)
-distance = st.sidebar.number_input("Distance", value=475.35)
-
-# Submit button - define outside sidebar
-submit = st.sidebar.button("Predict Wait Time", type="primary")
+    purchase_dow = st.number_input(
+        "Purchased Day of the Week", min_value=0, max_value=6, step=1, value=3
+    )
+    purchase_month = st.number_input(
+        "Purchased Month", min_value=1, max_value=12, step=1, value=1
+    )
+    year = st.number_input("Purchased Year", value=2018)
+    product_size_cm3 = st.number_input("Product Size in cm^3", value=9328)
+    product_weight_g = st.number_input("Product Weight in grams", value=1800)
+    geolocation_state_customer = st.number_input(
+        "Geolocation State of the Customer", value=10
+    )
+    geolocation_state_seller = st.number_input(
+        "Geolocation State of the Seller", value=20
+    )
+    distance = st.number_input("Distance", value=475.35)
+    
+    # Submit button
+    submit = st.button("Predict Wait Time", type="primary")
 
 # Define the submit button for the input parameters.
 with st.container():
